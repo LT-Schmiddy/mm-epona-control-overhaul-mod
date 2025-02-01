@@ -7,7 +7,10 @@
 *.lib
 *.pdb
 *.exp
+*.pyc
+*.nrm
 ./funcs.h
 patches.map
 build/
+runtime/
 .vscode/settings.json
