@@ -1,22 +1,34 @@
-import pathlib, subprocess, os, shutil, tomllib
+import pathlib, subprocess, os, shutil, tomllib, zipfile
 import build_n64recomp_tools as bnt
 
 BUILD_OFFLINE_MOD = False
+USING_ASSETS_ARCHIVE = True
 
-mod_data = tomllib.loads(pathlib.Path("mod.toml").read_text())
+script_dir = pathlib.Path(__file__).parent
+
+mod_data = tomllib.loads(script_dir.joinpath("mod.toml").read_text())
 mod_manifest_data = mod_data["manifest"]
 # print(mod_data)
-build_dir = pathlib.Path(__file__).parent.joinpath(f"build")
+build_dir = script_dir.joinpath(f"build")
 build_nrm_file = build_dir.joinpath(f"{mod_data['inputs']['mod_filename']}.nrm")
 build_dll_file = build_nrm_file.with_suffix(".dll")
 build_pdb_file = build_nrm_file.with_suffix(".pdb")
 
-runtime_mods_dir = pathlib.Path(__file__).parent.joinpath("runtime/mods")
+runtime_mods_dir = script_dir.joinpath("runtime/mods")
 runtime_nrm_file = runtime_mods_dir.joinpath(f"{mod_data['inputs']['mod_filename']}.nrm")
 runtime_dll_file = runtime_nrm_file.with_suffix(".dll")
 runtime_pdb_file = runtime_nrm_file.with_suffix(".pdb")
 
+assets_archive_path = script_dir.joinpath("assets_archive.zip")
+assets_extract_path = script_dir.joinpath("assets_extracted")
 
+# Unzipping Archive:
+if USING_ASSETS_ARCHIVE and not assets_extract_path.is_dir():
+    print(f"Assets folder '{assets_extract_path.name}' not found. Extracting assets from '{assets_archive_path.name}'...")
+    with zipfile.ZipFile(assets_archive_path, 'r') as zip_ref:
+        zip_ref.extractall(assets_extract_path)
+        
+# Building recomp tools:
 if not bnt.build_dir.exists():
     print("N64Recomp tools not built. Building now...")
     bnt.rebuild_tools();
