@@ -1,4 +1,5 @@
-#include "modding.h"
+/* DISABLED FOR NOW
+#include "mod_globals.h"
 
 #include "prevent_bss_reordering.h"
 #include "global.h"
@@ -10,8 +11,8 @@
 #include "overlays/actors/ovl_En_Horse/z_en_horse.h"
 
 typedef struct AnimSfxEntry {
-    /* 0x0 */ u16 sfxId;
-    /* 0x2 */ s16 flags; // negative marks the end
+    u16 sfxId;
+    s16 flags; // negative marks the end
 } AnimSfxEntry;          // size = 0x4
 
 // extern char gPlayerAnim_link_uma_wait_1[];
@@ -245,3 +246,4 @@ s32 func_80847190(PlayState* play, Player* this, s32 arg2);
 //         this->csAction = PLAYER_CSACTION_NONE;
 //     }
 // }
+*/
