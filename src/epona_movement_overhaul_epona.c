@@ -1,247 +1,156 @@
 #include "epona_movement_overhaul_epona.h"
 
+typedef struct {
+    f32 stickMag;
+    s16 stickAngle;
+    s16 desiredDirection;
+    s16 desiredDirectionDelta;
+    s16 turnAngle;
+} TurnInfo;
+
 Camera* getActiveCamera(PlayState* play) {
     return play->cameraPtrs[play->activeCamId];
 }
 
-RECOMP_PATCH void EnHorse_StickDirection(Vec2f* curStick, f32* stickMag, s16* angle) {
-    *stickMag = sqrtf(SQ(curStick->x) + SQ(curStick->z));
-    *stickMag = CLAMP_MAX(*stickMag, 60.0f);
-    *angle = Math_Atan2S(-curStick->x, curStick->z);
-}
+void EnHorse_GetTurnInfo(EnHorse* this, PlayState* play, Vec2f* curStick, TurnInfo* out_turnInfo) {
+    EnHorse_StickDirection(curStick, &out_turnInfo->stickMag, &out_turnInfo->stickAngle);
 
-void EnHorse_StickDirection2(EnHorse* this, PlayState* play, Vec2f* curStick, f32* out_stickMag, s16* out_angle) {
     Camera* cam = getActiveCamera(play);
-    // recomp_printf("cam.foc: %f\n", cam->fov);
-    // recomp_printf("cam.camDir.y = %i, this->actor.world.rot = %i\n", cam->camDir.y, this->actor.world.rot.y);
-    // recomp_printf("cam.at: %i, %i, %i\n", cam->at.x, cam->at.y, cam->at.z);
-
-    // f32 relX = -(play->state.input[0].rel.stick_x / 10);
-    // f32 relZ = (play->state.input[0].rel.stick_y / 10);
     
     f32 relX = -(curStick->x);
     f32 relZ = (curStick->z);
 
-    // f32 relMag = sqrtf((relX * relX) + (relZ * relZ));
-    // if (relMag > 1.0f) {
-    //     relX /= relMag;
-    //     relZ /= relMag;
-    // }
-
-
-    s16 angle = cam->camDir.y - this->actor.world.rot.y;
+    s16 angle = cam->camDir.y;
     // Determine what left and right mean based on camera angle
     f32 relX2 = relX * Math_CosS(angle) + relZ * Math_SinS(angle);
     f32 relZ2 = relZ * Math_CosS(angle) - relX * Math_SinS(angle);
 
-    // f32 relX2 = relX * Math_CosS(this->actor.world.rot.y) + relZ * Math_SinS(this->actor.world.rot.y);
-    // f32 relZ2 = relZ * Math_CosS(this->actor.world.rot.y) - relX * Math_SinS(this->actor.world.rot.y);
 
-    // recomp_printf("relX2: %f, relZ2: %f\n", relX2, relZ2);
+    out_turnInfo->desiredDirection = Math_Atan2S(relX2, relZ2);
+    out_turnInfo->desiredDirectionDelta = out_turnInfo->desiredDirection - this->actor.world.rot.y;
 
-    *out_stickMag = sqrtf(SQ(relX2) + SQ(relZ2));
-    *out_stickMag = CLAMP_MAX(*out_stickMag, 60.0f);
-    *out_angle = Math_Atan2S(relX2, relZ2);
+    // recomp_printf("desiredDirectionDelta: %i\n", out_turnInfo->desiredDirectionDelta);
+    out_turnInfo->turnAngle = USE_ALTERNATE_CONTROLS ?  out_turnInfo->desiredDirectionDelta : out_turnInfo->stickAngle;
 }
-
-// s16 EnHorse_GetDesiredDirection(EnHorse* this, PlayState* play, Vec2f* curStick) {
-//     Camera* cam = getActiveCamera(play);
-    
-//     f32 relX = -(curStick->x);
-//     f32 relZ = (curStick->z);
-
-//     s16 angle = cam->camDir.y;
-//     // s16 angle = cam->camDir.y - this->actor.world.rot.y;
-//     // Determine what left and right mean based on camera angle
-//     f32 relX2 = relX * Math_CosS(angle) + relZ * Math_SinS(angle);
-//     f32 relZ2 = relZ * Math_CosS(angle) - relX * Math_SinS(angle);
-
-//     // f32 relX2 = relX * Math_CosS(this->actor.world.rot.y) + relZ * Math_SinS(this->actor.world.rot.y);
-//     // f32 relZ2 = relZ * Math_CosS(this->actor.world.rot.y) - relX * Math_SinS(this->actor.world.rot.y);
-
-//     recomp_printf("relX2: %f, relZ2: %f\n", relX2, relZ2);
-
-//     return Math_Atan2S(relX2, relZ2);
-// }
 
 RECOMP_PATCH void EnHorse_UpdateSpeed(EnHorse* this, PlayState* play, f32 brakeDecel, f32 brakeAngle, f32 minStickMag, f32 decel,
                          f32 baseSpeed, s16 turnSpeed) {
     f32 phi_f0;
-    f32 stickMag;
-    s16 stickAngle;
+    TurnInfo t;
     s16 turn;
     f32 temp_f12;
 
     turnSpeed = turnSpeed * EPONA_TURN_MULT;
+    brakeDecel = brakeDecel * EPONA_BRAKE_MULT;
 
-    if (USE_ALTERNATE_CONTROLS) {
-        if (!EnHorse_PlayerCanMove(this, play)) {
-            if (this->actor.speed > 8.0f) {
-                this->actor.speed -= decel;
-            } else if (this->actor.speed < 0.0f) {
-                this->actor.speed = 0.0f;
-            }
-            return;
-        }
 
-        baseSpeed *= EnHorse_SlopeSpeedMultiplier(this, play);
-        EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
-
-        // if (Math_CosS(stickAngle) <= brakeAngle) {
-        if (stickMag < 0.01f) {
-            this->actor.speed -= brakeDecel;
-            this->actor.speed = CLAMP_MIN(this->actor.speed, 0.0f);
-            return;
-        }
-
-        if (stickMag < minStickMag) {
-            this->stateFlags &= ~ENHORSE_BOOST;
-            this->stateFlags &= ~ENHORSE_BOOST_DECEL;
+    if (!EnHorse_PlayerCanMove(this, play)) {
+        if (this->actor.speed > 8.0f) {
             this->actor.speed -= decel;
-            if (this->actor.speed < 0.0f) {
-                this->actor.speed = 0.0f;
-            }
-            return;
+        } else if (this->actor.speed < 0.0f) {
+            this->actor.speed = 0.0f;
         }
-
-        if (this->stateFlags & ENHORSE_BOOST) {
-            if ((16 - this->boostTimer) > 0) {
-                this->actor.speed = (((EnHorse_SlopeSpeedMultiplier(this, play) * this->boostSpeed) - this->actor.speed) /
-                                    (16.0f - this->boostTimer)) +
-                                    this->actor.speed;
-            } else {
-                this->actor.speed = EnHorse_SlopeSpeedMultiplier(this, play) * this->boostSpeed;
-            }
-
-            if ((EnHorse_SlopeSpeedMultiplier(this, play) * this->boostSpeed) <= this->actor.speed) {
-                this->stateFlags &= ~ENHORSE_BOOST;
-                this->stateFlags |= ENHORSE_BOOST_DECEL;
-            }
-        } else if (this->stateFlags & ENHORSE_BOOST_DECEL) {
-            if (this->actor.speed > baseSpeed) {
-                this->actor.speed -= 0.06f;
-            } else if (this->actor.speed < baseSpeed) {
-                this->actor.speed = baseSpeed;
-                this->stateFlags &= ~ENHORSE_BOOST_DECEL;
-            }
-        } else {
-            if (this->actor.speed <= (baseSpeed * (1.0f / 54.0f) * stickMag)) {
-                phi_f0 = 1.0f;
-            } else {
-                phi_f0 = -1.0f;
-            }
-
-            this->actor.speed += phi_f0 * 50.0f * 0.01f;
-
-            if (this->actor.speed > baseSpeed) {
-                this->actor.speed -= decel;
-                if (this->actor.speed < baseSpeed) {
-                    this->actor.speed = baseSpeed;
-                }
-            }
-        }
-
-        temp_f12 = stickAngle * (1 / 32236.f);
-        turn = stickAngle * temp_f12 * temp_f12 * (2.2f - (this->actor.speed * (1.0f / this->boostSpeed)));
-        turn = CLAMP(turn, -turnSpeed * (2.2f - (1.7f * this->actor.speed * (1.0f / this->boostSpeed))),
-                    turnSpeed * (2.2f - (1.7f * this->actor.speed * (1.0f / this->boostSpeed))));
-        this->actor.world.rot.y += turn;
-        this->actor.shape.rot.y = this->actor.world.rot.y;
-
-    } else {        
-        // Vanilla Controls:
-        if (!EnHorse_PlayerCanMove(this, play)) {
-            if (this->actor.speed > 8.0f) {
-                this->actor.speed -= decel;
-            } else if (this->actor.speed < 0.0f) {
-                this->actor.speed = 0.0f;
-            }
-            return;
-        }
-
-        baseSpeed *= EnHorse_SlopeSpeedMultiplier(this, play);
-        EnHorse_StickDirection(&this->curStick, &stickMag, &stickAngle);
-        // EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
-
-        if (Math_CosS(stickAngle) <= brakeAngle) {
-            this->actor.speed -= brakeDecel;
-            this->actor.speed = CLAMP_MIN(this->actor.speed, 0.0f);
-            return;
-        }
-
-        if (stickMag < minStickMag) {
-            this->stateFlags &= ~ENHORSE_BOOST;
-            this->stateFlags &= ~ENHORSE_BOOST_DECEL;
-            this->actor.speed -= decel;
-            if (this->actor.speed < 0.0f) {
-                this->actor.speed = 0.0f;
-            }
-            return;
-        }
-
-        if (this->stateFlags & ENHORSE_BOOST) {
-            if ((16 - this->boostTimer) > 0) {
-                this->actor.speed = (((EnHorse_SlopeSpeedMultiplier(this, play) * this->boostSpeed) - this->actor.speed) /
-                                    (16.0f - this->boostTimer)) +
-                                    this->actor.speed;
-            } else {
-                this->actor.speed = EnHorse_SlopeSpeedMultiplier(this, play) * this->boostSpeed;
-            }
-
-            if ((EnHorse_SlopeSpeedMultiplier(this, play) * this->boostSpeed) <= this->actor.speed) {
-                this->stateFlags &= ~ENHORSE_BOOST;
-                this->stateFlags |= ENHORSE_BOOST_DECEL;
-            }
-        } else if (this->stateFlags & ENHORSE_BOOST_DECEL) {
-            if (this->actor.speed > baseSpeed) {
-                this->actor.speed -= 0.06f;
-            } else if (this->actor.speed < baseSpeed) {
-                this->actor.speed = baseSpeed;
-                this->stateFlags &= ~ENHORSE_BOOST_DECEL;
-            }
-        } else {
-            if (this->actor.speed <= (baseSpeed * (1.0f / 54.0f) * stickMag)) {
-                phi_f0 = 1.0f;
-            } else {
-                phi_f0 = -1.0f;
-            }
-
-            this->actor.speed += phi_f0 * 50.0f * 0.01f;
-
-            if (this->actor.speed > baseSpeed) {
-                this->actor.speed -= decel;
-                if (this->actor.speed < baseSpeed) {
-                    this->actor.speed = baseSpeed;
-                }
-            }
-        }
-
-        temp_f12 = stickAngle * (1 / 32236.f);
-        turn = stickAngle * temp_f12 * temp_f12 * (2.2f - (this->actor.speed * (1.0f / this->boostSpeed)));
-        turn = CLAMP(turn, -turnSpeed * (2.2f - (1.7f * this->actor.speed * (1.0f / this->boostSpeed))),
-                    turnSpeed * (2.2f - (1.7f * this->actor.speed * (1.0f / this->boostSpeed))));
-        this->actor.world.rot.y += turn;
-        this->actor.shape.rot.y = this->actor.world.rot.y;
-    
+        return;
     }
+
+    baseSpeed *= EnHorse_SlopeSpeedMultiplier(this, play);
+    EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
+
+    // if (Math_CosS(stickAngle) <= brakeAngle) {
+    if ((!USE_ALTERNATE_CONTROLS && Math_CosS(t.stickAngle) <= brakeAngle) || (USE_ALTERNATE_CONTROLS && t.stickMag < 0.01f)) {
+        // recomp_printf("BRAKING!\n");
+        this->actor.speed -= brakeDecel;
+        this->actor.speed = CLAMP_MIN(this->actor.speed, 0.0f);
+        return;
+    }
+
+    if (t.stickMag < minStickMag) {
+        this->stateFlags &= ~ENHORSE_BOOST;
+        this->stateFlags &= ~ENHORSE_BOOST_DECEL;
+        this->actor.speed -= decel;
+        if (this->actor.speed < 0.0f) {
+            this->actor.speed = 0.0f;
+        }
+        return;
+    }
+
+    if (this->stateFlags & ENHORSE_BOOST) {
+        if ((16 - this->boostTimer) > 0) {
+            this->actor.speed = (((EnHorse_SlopeSpeedMultiplier(this, play) * this->boostSpeed) - this->actor.speed) /
+                                (16.0f - this->boostTimer)) +
+                                this->actor.speed;
+        } else {
+            this->actor.speed = EnHorse_SlopeSpeedMultiplier(this, play) * this->boostSpeed;
+        }
+
+        if ((EnHorse_SlopeSpeedMultiplier(this, play) * this->boostSpeed) <= this->actor.speed) {
+            this->stateFlags &= ~ENHORSE_BOOST;
+            this->stateFlags |= ENHORSE_BOOST_DECEL;
+        }
+    } else if (this->stateFlags & ENHORSE_BOOST_DECEL) {
+        if (this->actor.speed > baseSpeed) {
+            this->actor.speed -= 0.06f;
+        } else if (this->actor.speed < baseSpeed) {
+            this->actor.speed = baseSpeed;
+            this->stateFlags &= ~ENHORSE_BOOST_DECEL;
+        }
+    } else {
+        if (this->actor.speed <= (baseSpeed * (1.0f / 54.0f) * t.stickMag)) {
+            phi_f0 = 1.0f;
+        } else {
+            phi_f0 = -1.0f;
+        }
+
+        this->actor.speed += phi_f0 * 50.0f * 0.01f;
+
+        if (this->actor.speed > baseSpeed) {
+            this->actor.speed -= decel;
+            if (this->actor.speed < baseSpeed) {
+                this->actor.speed = baseSpeed;
+            }
+        }
+    }
+
+    if (ABS(this->actor.world.rot.y - t.desiredDirection) < TURN_SNAP_ANGLE) {
+        this->actor.world.rot.y = t.desiredDirection;
+    } else {
+        temp_f12 = t.turnAngle * (1 / 32236.f);
+        turn = t.turnAngle * temp_f12 * temp_f12 * (2.2f - (this->actor.speed * (1.0f / this->boostSpeed)));
+        turn = CLAMP(turn, -turnSpeed * (2.2f - (1.7f * this->actor.speed * (1.0f / this->boostSpeed))),
+                    turnSpeed * (2.2f - (1.7f * this->actor.speed * (1.0f / this->boostSpeed))));
+        
+        // Make sure we don't spend forever reaching the angle:
+        if (ABS(turn) < MINIMUM_TURN_ANGLE) {
+            turn = 300 * ((turn > 0 ) ? 1 : -1);
+        }
+        this->actor.world.rot.y += turn;
+    }
+    this->actor.shape.rot.y = this->actor.world.rot.y;
 }
 
 
 RECOMP_PATCH void EnHorse_MountedIdle(EnHorse* this, PlayState* play) {
-    f32 mag;
-    s16 angle = 0;
-
     this->actor.speed = 0.0f;
-    // EnHorse_StickDirection(&this->curStick, &mag, &angle);
-    EnHorse_StickDirection2(this, play, &this->curStick, &mag, &angle);
-    if (mag > 10.0f) {
+
+    TurnInfo t;
+    EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
+
+    if (t.stickMag > 10.0f) {
         if (EnHorse_PlayerCanMove(this, play) == true) {
-            if (Math_CosS(angle) <= -0.5f) {
-                EnHorse_StartReversingInterruptable(this);
-            } else if (Math_CosS(angle) <= 0.7071f) {
-                EnHorse_StartTurning(this);
-            } else {
+            if (USE_ALTERNATE_CONTROLS) { 
+                if (Math_CosS(t.turnAngle) <= 0.7071f) {
+                    EnHorse_StartTurning(this);
+                } 
                 EnHorse_StartWalkingFromIdle(this);
+                
+            } else {
+                if (Math_CosS(t.turnAngle) <= -0.5f) {
+                    EnHorse_StartReversingInterruptable(this);
+                } else if (Math_CosS(t.turnAngle) <= 0.7071f) {
+                    EnHorse_StartTurning(this);
+                } else {
+                    EnHorse_StartWalkingFromIdle(this);
+                }
             }
         } else if (this->unk_3EC != this->actor.world.rot.y) {
             EnHorse_StartTurning(this);
@@ -254,21 +163,30 @@ RECOMP_PATCH void EnHorse_MountedIdle(EnHorse* this, PlayState* play) {
 }
 
 RECOMP_PATCH void EnHorse_MountedIdleWhinnying(EnHorse* this, PlayState* play) {
-    f32 stickMag;
-    s16 stickAngle = 0;
+    TurnInfo t;
+    EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
 
     this->actor.speed = 0.0f;
     // EnHorse_StickDirection(&this->curStick, &stickMag, &stickAngle);
-    EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
-    if (stickMag > 10.0f) {
+
+    if (t.stickMag > 10.0f) {
         if (EnHorse_PlayerCanMove(this, play) == true) {
-            if (Math_CosS(stickAngle) <= -0.5f) {
-                EnHorse_StartReversingInterruptable(this);
-            } else if (Math_CosS(stickAngle) <= 0.7071f) {
-                EnHorse_StartTurning(this);
-            } else {
+            if (USE_ALTERNATE_CONTROLS) { 
+                if (Math_CosS(t.turnAngle) <= 0.7071f) {
+                    EnHorse_StartTurning(this);
+                } 
                 EnHorse_StartWalkingFromIdle(this);
+                
+            } else {
+                if (Math_CosS(t.turnAngle) <= -0.5f) {
+                    EnHorse_StartReversingInterruptable(this);
+                } else if (Math_CosS(t.turnAngle) <= 0.7071f) {
+                    EnHorse_StartTurning(this);
+                } else {
+                    EnHorse_StartWalkingFromIdle(this);
+                }
             }
+
         } else if (this->unk_3EC != this->actor.world.rot.y) {
             EnHorse_StartTurning(this);
         }
@@ -280,22 +198,22 @@ RECOMP_PATCH void EnHorse_MountedIdleWhinnying(EnHorse* this, PlayState* play) {
 }
 
 RECOMP_PATCH void EnHorse_MountedTurn(EnHorse* this, PlayState* play) {
-    f32 stickMag;
+    TurnInfo t;
     s16 clampedYaw;
-    s16 stickAngle;
 
     this->actor.speed = 0.0f;
     EnHorse_PlayWalkingSound(this);
     if (EnHorse_PlayerCanMove(this, play) == true) {
         // EnHorse_StickDirection(&this->curStick, &stickMag, &stickAngle);
-        EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
-        if (stickMag > 10.0f) {
+        EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
+        
+        if (t.stickMag > 10.0f) {
             if (!EnHorse_PlayerCanMove(this, play)) {
                 EnHorse_StartMountedIdleResetAnim(this);
-            } else if (Math_CosS(stickAngle) <= -0.5f) {
+            } else if (Math_CosS(t.turnAngle) <= -0.5f) {
                 EnHorse_StartReversingInterruptable(this);
-            } else if (Math_CosS(stickAngle) <= 0.7071f) {
-                clampedYaw = CLAMP(stickAngle, -1600.0f, 1600.0f);
+            } else if (Math_CosS(t.turnAngle) <= 0.7071f) {
+                clampedYaw = CLAMP(t.turnAngle, -1600.0f, 1600.0f);
                 this->actor.world.rot.y += clampedYaw;
                 this->actor.shape.rot.y = this->actor.world.rot.y;
             } else {
@@ -306,7 +224,7 @@ RECOMP_PATCH void EnHorse_MountedTurn(EnHorse* this, PlayState* play) {
 
     if (SkelAnime_Update(&this->skin.skelAnime)) {
         if (EnHorse_PlayerCanMove(this, play) == true) {
-            if (Math_CosS(stickAngle) <= 0.7071f) {
+            if (Math_CosS(t.turnAngle) <= 0.7071f) {
                 EnHorse_StartTurning(this);
             } else {
                 EnHorse_StartMountedIdleResetAnim(this);
@@ -320,12 +238,10 @@ RECOMP_PATCH void EnHorse_MountedTurn(EnHorse* this, PlayState* play) {
 }
 
 RECOMP_PATCH void EnHorse_MountedWalk(EnHorse* this, PlayState* play) {
-    f32 stickMag;
-    s16 stickAngle;
-
+    TurnInfo t;
+    
     EnHorse_PlayWalkingSound(this);
-    // EnHorse_StickDirection(&this->curStick, &stickMag, &stickAngle);
-    EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
+    EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
 
     if ((this->noInputTimerMax == 0) ||
         ((this->noInputTimer > 0) && (this->noInputTimer < (this->noInputTimerMax - 20)))) {
@@ -361,7 +277,7 @@ RECOMP_PATCH void EnHorse_MountedWalk(EnHorse* this, PlayState* play) {
                 EnHorse_StartTrotting(this);
                 this->noInputTimer = 0;
                 this->noInputTimerMax = 0;
-            } else if ((stickMag < 10.0f) || (Math_CosS(stickAngle) <= -0.5f)) {
+            } else if ((t.stickMag < 10.0f) || (Math_CosS(t.turnAngle) <= -0.5f)) {
                 EnHorse_StartMountedIdleResetAnim(this);
                 this->noInputTimer = 0;
                 this->noInputTimerMax = 0;
@@ -376,12 +292,11 @@ RECOMP_PATCH void EnHorse_MountedWalk(EnHorse* this, PlayState* play) {
 }
 
 RECOMP_PATCH void EnHorse_MountedTrot(EnHorse* this, PlayState* play) {
-    f32 stickMag;
-    s16 stickAngle;
-
     EnHorse_UpdateSpeed(this, play, 0.3f, -0.5f, 10.0f, 0.06f, 6.0f, 800);
-    // EnHorse_StickDirection(&this->curStick, &stickMag, &stickAngle);
-    EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
+    
+    TurnInfo t;
+    EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
+    // EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
     if (this->actor.speed < 3.0f) {
         EnHorse_StartWalkingInterruptable(this);
     }
@@ -402,11 +317,9 @@ RECOMP_PATCH void EnHorse_MountedTrot(EnHorse* this, PlayState* play) {
 }
 
 RECOMP_PATCH void EnHorse_MountedGallop(EnHorse* this, PlayState* play) {
-    f32 stickMag;
-    s16 stickAngle;
-
-    // EnHorse_StickDirection(&this->curStick, &stickMag, &stickAngle);
-    EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
+    TurnInfo t;
+    EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
+    // EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
 
     if (this->noInputTimer <= 0) {
         EnHorse_UpdateSpeed(this, play, 0.3f, -0.5f, 10.0f, 0.06f, 8.0f, 800);
@@ -425,13 +338,24 @@ RECOMP_PATCH void EnHorse_MountedGallop(EnHorse* this, PlayState* play) {
         func_8087C1C0(this);
         Rumble_Request(0.0f, 120, 8, 255);
         if (EnHorse_PlayerCanMove(this, play) == true) {
-            if ((stickMag >= 10.0f) && (Math_CosS(stickAngle) <= -0.5f)) {
-                EnHorse_StartBraking(this, play);
-            } else if (this->actor.speed < 6.0f) {
-                EnHorse_StartTrotting(this);
+            if (USE_ALTERNATE_CONTROLS) {
+                if ((t.stickMag < 0.01f)) {
+                    EnHorse_StartBraking(this, play);
+                } else if (this->actor.speed < 6.0f) {
+                    EnHorse_StartTrotting(this);
+                } else {
+                    EnHorse_MountedGallopReset(this);
+                }
             } else {
-                EnHorse_MountedGallopReset(this);
+                if ((t.stickMag >= 10.0f) && (Math_CosS(t.turnAngle) <= -0.5f)) {
+                    EnHorse_StartBraking(this, play);
+                } else if (this->actor.speed < 6.0f) {
+                    EnHorse_StartTrotting(this);
+                } else {
+                    EnHorse_MountedGallopReset(this);
+                }
             }
+
         } else {
             EnHorse_MountedGallopReset(this);
         }
@@ -439,9 +363,6 @@ RECOMP_PATCH void EnHorse_MountedGallop(EnHorse* this, PlayState* play) {
 }
 
 RECOMP_PATCH void EnHorse_MountedRearing(EnHorse* this, PlayState* play) {
-    f32 stickMag;
-    s16 stickAngle;
-
     this->actor.speed = 0.0f;
     if (this->curFrame > 25.0f) {
         if (!(this->stateFlags & ENHORSE_LAND2_SOUND)) {
@@ -455,8 +376,9 @@ RECOMP_PATCH void EnHorse_MountedRearing(EnHorse* this, PlayState* play) {
         }
     }
 
-    // EnHorse_StickDirection(&this->curStick, &stickMag, &stickAngle);
-    EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
+    TurnInfo t;
+    EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
+    // EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
 
     if (SkelAnime_Update(&this->skin.skelAnime)) {
         if (EnHorse_PlayerCanMove(this, play) == true) {
@@ -470,7 +392,7 @@ RECOMP_PATCH void EnHorse_MountedRearing(EnHorse* this, PlayState* play) {
                 this->noInputTimerMax = 100;
                 this->stateFlags &= ~ENHORSE_FORCE_WALKING;
                 EnHorse_StartWalking(this);
-            } else if (Math_CosS(stickAngle) <= -0.5f) {
+            } else if (!USE_ALTERNATE_CONTROLS && (t.turnAngle) <= -0.5f) {
                 EnHorse_StartReversingInterruptable(this);
             } else {
                 EnHorse_StartMountedIdleResetAnim(this);
@@ -481,34 +403,31 @@ RECOMP_PATCH void EnHorse_MountedRearing(EnHorse* this, PlayState* play) {
     }
 }
 
-
-
 RECOMP_PATCH void EnHorse_Reverse(EnHorse* this, PlayState* play) {
-    f32 stickMag;
-    s16 stickAngle;
     s16 turnAmount;
     Player* player = GET_PLAYER(play);
 
     EnHorse_PlayWalkingSound(this);
-    // EnHorse_StickDirection(&this->curStick, &stickMag, &stickAngle);
-    EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
+    TurnInfo t;
+    EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
+    // EnHorse_StickDirection2(this, play, &this->curStick, &stickMag, &stickAngle);
     if (EnHorse_PlayerCanMove(this, play) == true) {
         if ((this->noInputTimerMax == 0) ||
             ((this->noInputTimer > 0) && (this->noInputTimer < (this->noInputTimerMax - 20)))) {
-            if ((stickMag < 10.0f) && (this->noInputTimer <= 0)) {
+            if ((t.stickMag < 10.0f) && (this->noInputTimer <= 0)) {
                 EnHorse_StartMountedIdleResetAnim(this);
                 this->actor.speed = 0.0f;
                 return;
-            } else if (stickMag < 10.0f) {
-                stickAngle = -0x7FFF;
-            } else if (Math_CosS(stickAngle) > -0.5f) {
+            } else if (t.stickMag < 10.0f) {
+                t.turnAngle = -0x7FFF;
+            } else if (Math_CosS(t.turnAngle) > -0.5f) {
                 this->noInputTimerMax = 0;
                 EnHorse_StartMountedIdleResetAnim(this);
                 this->actor.speed = 0.0f;
                 return;
             }
-        } else if (stickMag < 10.0f) {
-            stickAngle = -0x7FFF;
+        } else if (t.stickMag < 10.0f) {
+            t.turnAngle = -0x7FFF;
         }
     } else if ((player->actor.flags & ACTOR_FLAG_TALK) || (play->csCtx.state != CS_STATE_IDLE) ||
                (CutsceneManager_GetCurrentCsId() != CS_ID_NONE) || (player->stateFlags1 & PLAYER_STATE1_20)) {
@@ -516,11 +435,11 @@ RECOMP_PATCH void EnHorse_Reverse(EnHorse* this, PlayState* play) {
         this->actor.speed = 0.0f;
         return;
     } else {
-        stickAngle = -0x7FFF;
+        t.turnAngle = -0x7FFF;
     }
 
     this->actor.speed = -2.0f;
-    turnAmount = -0x8000 - stickAngle;
+    turnAmount = -0x8000 - t.turnAngle;
     turnAmount = CLAMP(turnAmount, -2400.0f, 2400.0f);
     this->actor.world.rot.y += turnAmount;
     this->actor.shape.rot.y = this->actor.world.rot.y;
@@ -536,17 +455,29 @@ RECOMP_PATCH void EnHorse_Reverse(EnHorse* this, PlayState* play) {
 
     if (SkelAnime_Update(&this->skin.skelAnime) && (this->noInputTimer <= 0) &&
         (EnHorse_PlayerCanMove(this, play) == true)) {
-        if ((stickMag > 10.0f) && (Math_CosS(stickAngle) <= -0.5f)) {
-            this->noInputTimerMax = 0;
-            EnHorse_StartReversingInterruptable(this);
-        } else if (stickMag < 10.0f) {
-            this->noInputTimerMax = 0;
-            EnHorse_StartMountedIdleResetAnim(this);
+        if (USE_ALTERNATE_CONTROLS) {
+            if (t.stickMag < 10.0f) {
+                this->noInputTimerMax = 0;
+                EnHorse_StartMountedIdleResetAnim(this);
+            } else {
+                EnHorse_StartReversing(this);
+            }
         } else {
-            EnHorse_StartReversing(this);
+            if ((t.stickMag > 10.0f) && (Math_CosS(t.turnAngle) <= -0.5f)) {
+                this->noInputTimerMax = 0;
+                EnHorse_StartReversingInterruptable(this);
+            } else if (t.stickMag < 10.0f) {
+                this->noInputTimerMax = 0;
+                EnHorse_StartMountedIdleResetAnim(this);
+            } else {
+                EnHorse_StartReversing(this);
+            }
         }
     }
 }
+
+/*
+Not sure this section is actually needed.
 
 void Epona_ActionFunc(EnHorse* this, PlayState* play, EnHorseAction action) {
     // recomp_printf("Epona Action: %i\n", action);
@@ -850,4 +781,39 @@ RECOMP_PATCH void EnHorse_Update(Actor* thisx, PlayState* play2) {
         this->stateFlags &= ~ENHORSE_DRAW;
     }
 }
+*/
 
+// OLD AND CURSED. Keeping as a reference.
+// void EnHorse_StickDirection2(EnHorse* this, PlayState* play, Vec2f* curStick, f32* out_stickMag, s16* out_angle) {
+//     Camera* cam = getActiveCamera(play);
+//     // recomp_printf("cam.foc: %f\n", cam->fov);
+//     // recomp_printf("cam.camDir.y = %i, this->actor.world.rot = %i\n", cam->camDir.y, this->actor.world.rot.y);
+//     // recomp_printf("cam.at: %i, %i, %i\n", cam->at.x, cam->at.y, cam->at.z);
+
+//     // f32 relX = -(play->state.input[0].rel.stick_x / 10);
+//     // f32 relZ = (play->state.input[0].rel.stick_y / 10);
+    
+//     f32 relX = -(curStick->x);
+//     f32 relZ = (curStick->z);
+
+//     // f32 relMag = sqrtf((relX * relX) + (relZ * relZ));
+//     // if (relMag > 1.0f) {
+//     //     relX /= relMag;
+//     //     relZ /= relMag;
+//     // }
+
+
+//     s16 angle = cam->camDir.y - this->actor.world.rot.y;
+//     // Determine what left and right mean based on camera angle
+//     f32 relX2 = relX * Math_CosS(angle) + relZ * Math_SinS(angle);
+//     f32 relZ2 = relZ * Math_CosS(angle) - relX * Math_SinS(angle);
+
+//     // f32 relX2 = relX * Math_CosS(this->actor.world.rot.y) + relZ * Math_SinS(this->actor.world.rot.y);
+//     // f32 relZ2 = relZ * Math_CosS(this->actor.world.rot.y) - relX * Math_SinS(this->actor.world.rot.y);
+
+//     // recomp_printf("relX2: %f, relZ2: %f\n", relX2, relZ2);
+
+//     *out_stickMag = sqrtf(SQ(relX2) + SQ(relZ2));
+//     *out_stickMag = CLAMP_MAX(*out_stickMag, 60.0f);
+//     *out_angle = Math_Atan2S(relX2, relZ2);
+// }
