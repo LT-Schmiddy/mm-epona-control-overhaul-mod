@@ -60,3 +60,25 @@ data_reference_syms_files = [ "Zelda64RecompSyms/mm.us.rev1.datasyms.toml", "Zel
 
 # Additional files to include in the mod.
 additional_files = [ ]
+
+## Config options:
+
+[[manifest.config_options]]
+id = "control_mode"
+name = "Control Mode"
+description = "Whether or not to use the new controls for Epona."
+type = "Enum"
+options = [ "Tank", "Freeform" ]
+default = "Freeform"
+
+# [[manifest.config_options]]
+# id = "number_option"
+# name = "Number Option"
+# description = "Test number config option."
+# type = "Number"
+# min = 0
+# max = 10
+# step = 0.1
+# precision = 1
+# percent = false
+# default = 1

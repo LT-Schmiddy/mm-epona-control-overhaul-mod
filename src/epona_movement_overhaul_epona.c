@@ -8,6 +8,8 @@ typedef struct {
     s16 turnAngle;
 } TurnInfo;
 
+
+
 Camera* getActiveCamera(PlayState* play) {
     return play->cameraPtrs[play->activeCamId];
 }
@@ -43,6 +45,7 @@ RECOMP_PATCH void EnHorse_UpdateSpeed(EnHorse* this, PlayState* play, f32 brakeD
     turnSpeed = turnSpeed * EPONA_TURN_MULT;
     brakeDecel = brakeDecel * EPONA_BRAKE_MULT;
 
+    // recomp_printf("CONTROL_MODE: %i\n", USE_ALTERNATE_CONTROLS);
 
     if (!EnHorse_PlayerCanMove(this, play)) {
         if (this->actor.speed > 8.0f) {
