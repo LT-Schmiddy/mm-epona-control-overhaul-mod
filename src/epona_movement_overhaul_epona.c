@@ -389,7 +389,12 @@ RECOMP_PATCH void EnHorse_MountedRearing(EnHorse* this, PlayState* play) {
                 this->noInputTimer = 100;
                 this->noInputTimerMax = 100;
                 this->stateFlags &= ~ENHORSE_FORCE_REVERSING;
-                EnHorse_StartReversing(this);
+                if (USE_ALTERNATE_CONTROLS) {
+                    EnHorse_StartMountedIdleResetAnim(this);
+                } else {
+                    EnHorse_StartReversing(this);
+                }
+
             } else if (this->stateFlags & ENHORSE_FORCE_WALKING) {
                 this->noInputTimer = 100;
                 this->noInputTimerMax = 100;
