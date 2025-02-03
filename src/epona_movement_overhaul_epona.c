@@ -8,8 +8,6 @@ typedef struct {
     s16 turnAngle;
 } TurnInfo;
 
-
-
 Camera* getActiveCamera(PlayState* play) {
     return play->cameraPtrs[play->activeCamId];
 }
@@ -27,7 +25,6 @@ void EnHorse_GetTurnInfo(EnHorse* this, PlayState* play, Vec2f* curStick, TurnIn
     f32 relX2 = relX * Math_CosS(angle) + relZ * Math_SinS(angle);
     f32 relZ2 = relZ * Math_CosS(angle) - relX * Math_SinS(angle);
 
-
     out_turnInfo->desiredDirection = Math_Atan2S(relX2, relZ2);
     out_turnInfo->desiredDirectionDelta = out_turnInfo->desiredDirection - this->actor.world.rot.y;
 
@@ -42,8 +39,8 @@ RECOMP_PATCH void EnHorse_UpdateSpeed(EnHorse* this, PlayState* play, f32 brakeD
     s16 turn;
     f32 temp_f12;
 
-    turnSpeed = turnSpeed * EPONA_TURN_MULT;
-    brakeDecel = brakeDecel * EPONA_BRAKE_MULT;
+    turnSpeed = turnSpeed * EPONA_GLOBAL_TURN_MULT;
+    brakeDecel = brakeDecel * EPONA_GLOBAL_BRAKE_MULT;
 
     // recomp_printf("CONTROL_MODE: %i\n", USE_ALTERNATE_CONTROLS);
 
@@ -114,7 +111,7 @@ RECOMP_PATCH void EnHorse_UpdateSpeed(EnHorse* this, PlayState* play, f32 brakeD
         }
     }
 
-    if (ABS(this->actor.world.rot.y - t.desiredDirection) < TURN_SNAP_ANGLE) {
+    if (ABS(this->actor.world.rot.y - t.desiredDirection) < MINIMUM_TURN_ANGLE) {
         this->actor.world.rot.y = t.desiredDirection;
     } else {
         temp_f12 = t.turnAngle * (1 / 32236.f);
@@ -248,7 +245,7 @@ RECOMP_PATCH void EnHorse_MountedWalk(EnHorse* this, PlayState* play) {
 
     if ((this->noInputTimerMax == 0) ||
         ((this->noInputTimer > 0) && (this->noInputTimer < (this->noInputTimerMax - 20)))) {
-        EnHorse_UpdateSpeed(this, play, 0.3f, -0.5f, 10.0f, 0.06f, 3.0f, 0x320);
+        EnHorse_UpdateSpeed(this, play, WALK_SPEED_ARGS);
     } else {
         this->actor.speed = 3.0f;
     }
@@ -295,7 +292,7 @@ RECOMP_PATCH void EnHorse_MountedWalk(EnHorse* this, PlayState* play) {
 }
 
 RECOMP_PATCH void EnHorse_MountedTrot(EnHorse* this, PlayState* play) {
-    EnHorse_UpdateSpeed(this, play, 0.3f, -0.5f, 10.0f, 0.06f, 6.0f, 800);
+    EnHorse_UpdateSpeed(this, play, TROT_SPEED_ARGS);
     
     TurnInfo t;
     EnHorse_GetTurnInfo(this, play, &this->curStick, &t);
