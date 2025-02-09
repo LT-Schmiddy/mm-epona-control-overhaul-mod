@@ -20,7 +20,7 @@ def _get_tool_path(tool_name: str) -> str:
     raise RuntimeError(f"Couldn't find executable file '{tool_name}' in any of the following locations:\n" 
                        + "".join(["\t" + str(i) + "\n" for i in possible_paths]))
     
-def get_dependencies() -> dict[str, str]:
+def get_dependencies(print_locations: bool = False) -> dict[str, str]:
     retVal = {
         'clang': shutil.which("clang"),
         'clang-cl': shutil.which("clang-cl"),
@@ -32,7 +32,7 @@ def get_dependencies() -> dict[str, str]:
     for key, value in retVal.items():
         if value is None:
             raise RuntimeError(f"Couldn't find executable for '{key}', which is needed to build this project")
-        else:
+        elif print_locations:
             print(f"Found {key} at '{value}'")
         
     retVal['ninja'] = shutil.which("ninja")
@@ -40,10 +40,10 @@ def get_dependencies() -> dict[str, str]:
     if retVal['ninja'] is None:
         # raise RuntimeWarning(f"Couldn't find executable for ninja. Attempting to build N64Recomp tools may not work correctly.")
         print(f"WARNING: Couldn't find executable for ninja. Attempting to build N64Recomp tools may not work correctly.")
-    else:
+    elif print_locations:
         print(f"Found ninja at '{retVal['ninja']}'")
     return retVal
-
+deps = get_dependencies(True)
         
 def get_N64Recomp_path():
     return _get_tool_path("N64Recomp")
@@ -57,8 +57,9 @@ def get_RecompModTool_path():
 def get_RSPRecomp_path():
     return _get_tool_path("RSPRecomp")
 
+
 def rebuild_tools(config_flags: list[str] = [], build_flags: list[str] = [] ):
-    deps = get_dependencies()
+    global deps
     
     print(f"Ensuring submodules are up to date...")
     subprocess.call(
