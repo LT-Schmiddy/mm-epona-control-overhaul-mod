@@ -481,6 +481,285 @@ RECOMP_PATCH void EnHorse_Reverse(EnHorse* this, PlayState* play) {
     }
 }
 
+
+void EnHorse_UpdateBgCheckInfo(EnHorse* this, PlayState* play) {
+    s32 pad2[2];
+    Vec3f startPos;
+    Vec3f endPos;
+    Vec3f obstaclePos;
+    f32 temp_f0;
+    f32 intersectDist;
+    CollisionPoly* wall = NULL;
+    CollisionPoly* obstacleFloor = NULL;
+    s32 bgId;
+    f32 obstacleHeight;
+    f32 behindObstacleHeight;
+    DynaPolyActor* horseJump;
+    s32 movingFast;
+    s16 sp7E = 0;
+    DynaPolyActor* horseGameCheck = NULL;
+    s32 pad6;
+    s32 pad;
+    Vec3f intersect;
+    Vec3f obstacleTop;
+    s32 pad5;
+    s32 pad4;
+
+    if ((this->actor.params != ENHORSE_4) && (this->actor.params != ENHORSE_5) && (this->actor.params != ENHORSE_19) &&
+        (this->actor.params != ENHORSE_20) && (this->actor.params != ENHORSE_18)) {
+        Actor_UpdateBgCheckInfo(play, &this->actor, 40.0f, 35.0f, 100.0f,
+                                UPDBGCHECKINFO_FLAG_1 | UPDBGCHECKINFO_FLAG_4 | UPDBGCHECKINFO_FLAG_8 |
+                                    UPDBGCHECKINFO_FLAG_10);
+    } else {
+        Actor_UpdateBgCheckInfo(play, &this->actor, 40.0f, 35.0f, 100.0f,
+                                UPDBGCHECKINFO_FLAG_4 | UPDBGCHECKINFO_FLAG_8 | UPDBGCHECKINFO_FLAG_10);
+    }
+
+    if ((this->actor.bgCheckFlags & BGCHECKFLAG_WALL) &&
+        (Math_CosS(this->actor.wallYaw - this->actor.world.rot.y) < -0.3f)) {
+        if (this->actor.speed > 4.0f) {
+            this->actor.speed -= 1.0f;
+            if (this->type == HORSE_TYPE_2) {
+                Audio_PlaySfx_AtPos(&this->actor.projectedPos, NA_SE_EV_KID_HORSE_SANDDUST);
+            } else {
+                Audio_PlaySfx_AtPos(&this->actor.projectedPos, NA_SE_EV_KID_HORSE_SANDDUST);
+            }
+        }
+    }
+
+    horseJump = DynaPoly_GetActor(&play->colCtx, this->actor.floorBgId);
+
+    if (!(this->stateFlags & ENHORSE_JUMPING)) {
+        if ((horseJump != NULL) && (horseJump->actor.id == ACTOR_EN_HORSE_GAME_CHECK) &&
+            ((horseJump->actor.params & 0xFF) == 5)) {
+            this->stateFlags |= ENHORSE_FLAG_28;
+            this->unk_3E8 += ((-10.0f / this->actor.scale.y) - this->unk_3E8) * 0.5f;
+            if (this->actor.speed > 2.0f) {
+                this->actor.speed -= 1.0f;
+                if (this->type == HORSE_TYPE_2) {
+                    Audio_PlaySfx_AtPos(&this->actor.projectedPos, NA_SE_EV_KID_HORSE_SANDDUST);
+                } else {
+                    Audio_PlaySfx_AtPos(&this->actor.projectedPos, NA_SE_EV_KID_HORSE_SANDDUST);
+                }
+            }
+        } else {
+            this->stateFlags &= ~ENHORSE_FLAG_28;
+            this->unk_3E8 *= 0.5f;
+        }
+    }
+
+    if ((this->stateFlags & ENHORSE_JUMPING) || (this->stateFlags & ENHORSE_FLAG_28) || (this->actor.speed < 0.0f) ||
+        (this->action == ENHORSE_ACTION_STOPPING) || (this->action == ENHORSE_ACTION_MOUNTED_REARING)) {
+        return;
+    }
+
+    if (this->actor.speed > 8.0f) {
+        if (this->actor.speed < 12.8f) {
+            intersectDist = 160.0f;
+            movingFast = false;
+        } else {
+            intersectDist = 230.0f;
+            movingFast = true;
+        }
+    } else {
+        EnHorse_BgCheckSlowMoving(this, play);
+        return;
+    }
+
+    startPos = this->actor.world.pos;
+    startPos.y += 19.0f;
+
+    endPos = startPos;
+    endPos.x += intersectDist * Math_SinS(this->actor.world.rot.y);
+    endPos.y += intersectDist * Math_SinS(-this->actor.shape.rot.x);
+    endPos.z += intersectDist * Math_CosS(this->actor.world.rot.y);
+
+    intersect = endPos;
+    wall = NULL;
+
+    if (BgCheck_EntityLineTest1(&play->colCtx, &startPos, &endPos, &intersect, &wall, true, false, false, true,
+                                &bgId) == true) {
+        intersectDist = sqrtf(Math3D_Vec3fDistSq(&startPos, &intersect));
+        this->stateFlags |= ENHORSE_OBSTACLE;
+    }
+
+    if (wall != NULL) {
+        if (intersectDist < 30.0f) {
+            EnHorse_ResolveCollision(this, play, wall);
+        }
+
+        sp7E = BINANG_ROT180(this->actor.world.rot.y - Math_Atan2S(wall->normal.x, wall->normal.z));
+
+        if ((Math_CosS(sp7E) < 0.5f) || SurfaceType_IsHorseBlocked(&play->colCtx, wall, bgId)) {
+            return;
+        }
+
+        if (((movingFast == false) && (intersectDist < 80.0f)) || ((movingFast == true) && (intersectDist < 150.0f))) {
+            if ((play->sceneId != SCENE_KOEPONARACE) && (Math_CosS(sp7E) < 0.9f) && (this->playerControlled == true)) {
+                if (movingFast == false) {
+                    this->stateFlags |= ENHORSE_FORCE_REVERSING;
+                } else if (movingFast == true) {
+                    this->stateFlags |= ENHORSE_FORCE_REVERSING;
+                    EnHorse_StartBraking(this, play);
+                }
+            }
+            return;
+        }
+
+        horseJump = DynaPoly_GetActor(&play->colCtx, bgId);
+        if ((this->stateFlags & ENHORSE_FLAG_26) &&
+            (((horseJump != NULL) && (horseJump->actor.id != ACTOR_BG_UMAJUMP)) || (horseJump == NULL))) {
+            if (this->playerControlled == true) {
+                if (movingFast == false) {
+                    this->stateFlags |= ENHORSE_FORCE_REVERSING;
+                } else if (movingFast == true) {
+                    this->stateFlags |= ENHORSE_FORCE_REVERSING;
+                    EnHorse_StartBraking(this, play);
+                }
+            }
+            return;
+        }
+    }
+
+    intersectDist += 5.0f;
+    obstaclePos = startPos;
+
+    obstaclePos.x += intersectDist * Math_SinS(this->actor.world.rot.y);
+    obstaclePos.y = this->actor.world.pos.y + 120.0f;
+    obstaclePos.z += intersectDist * Math_CosS(this->actor.world.rot.y);
+
+    obstacleTop = obstaclePos;
+    obstacleTop.y = BgCheck_EntityRaycastFloor3(&play->colCtx, &obstacleFloor, &bgId, &obstaclePos);
+
+    if (obstacleTop.y == BGCHECK_Y_MIN) {
+        return;
+    }
+
+    obstacleHeight = obstacleTop.y - this->actor.world.pos.y;
+
+    if ((this->actor.floorPoly == NULL) || (obstacleFloor == NULL)) {
+        return;
+    }
+
+    if ((Math3D_DistPlaneToPos(COLPOLY_GET_NORMAL(this->actor.floorPoly->normal.x),
+                               COLPOLY_GET_NORMAL(this->actor.floorPoly->normal.y),
+                               COLPOLY_GET_NORMAL(this->actor.floorPoly->normal.z), this->actor.floorPoly->dist,
+                               &obstacleTop) < -40.0f) &&
+        (Math3D_DistPlaneToPos(COLPOLY_GET_NORMAL(obstacleFloor->normal.x), COLPOLY_GET_NORMAL(obstacleFloor->normal.y),
+                               COLPOLY_GET_NORMAL(obstacleFloor->normal.z), obstacleFloor->dist,
+                               &this->actor.world.pos) > 40.0f)) {
+        if ((movingFast == true) && (this->playerControlled == true) && (this->action != ENHORSE_ACTION_STOPPING) &&
+            (play->sceneId != SCENE_KOEPONARACE)) {
+            this->stateFlags |= ENHORSE_FORCE_REVERSING;
+            EnHorse_StartBraking(this, play);
+        }
+        this->stateFlags |= ENHORSE_OBSTACLE;
+        return;
+    }
+
+    temp_f0 = COLPOLY_GET_NORMAL(obstacleFloor->normal.y);
+    if ((temp_f0 < 0.81915206f) || SurfaceType_IsHorseBlocked(&play->colCtx, obstacleFloor, bgId) ||
+        (SurfaceType_GetFloorType(&play->colCtx, obstacleFloor, bgId) == FLOOR_TYPE_7)) {
+        if ((Math_CosS(sp7E) < 0.9f) && (movingFast == true) && (this->playerControlled == true) &&
+            (this->action != ENHORSE_ACTION_STOPPING) && (play->sceneId != SCENE_KOEPONARACE)) {
+            this->stateFlags |= ENHORSE_FORCE_REVERSING;
+            EnHorse_StartBraking(this, play);
+        }
+        return;
+    }
+
+    if (wall == NULL) {
+        horseGameCheck = DynaPoly_GetActor(&play->colCtx, bgId);
+        if ((horseGameCheck == NULL) || (horseGameCheck->actor.id != ACTOR_EN_HORSE_GAME_CHECK) ||
+            ((horseGameCheck->actor.params & 0xFF) != 5)) {
+            return;
+        }
+    }
+
+    if (((obstacleTop.y < intersect.y) &&
+         ((horseGameCheck == NULL) || (horseGameCheck->actor.id != ACTOR_EN_HORSE_GAME_CHECK) ||
+          ((horseGameCheck->actor.params & 0xFF) != 5))) ||
+        ((this->stateFlags & ENHORSE_CANT_JUMP) && (this->action != ENHORSE_ACTION_5))) {
+        return;
+    }
+
+    if ((this->action == ENHORSE_ACTION_5) && !(this->stateFlags & ENHORSE_FLAG_30)) {
+        horseGameCheck = DynaPoly_GetActor(&play->colCtx, bgId);
+        if ((horseGameCheck != NULL) && (horseGameCheck->actor.id == ACTOR_EN_HORSE_GAME_CHECK) &&
+            ((horseGameCheck->actor.params & 0xFF) == 5)) {
+            this->stateFlags |= ENHORSE_FLAG_30;
+            this->postDrawFunc = func_8088126C;
+        }
+    }
+
+    if (this->playerControlled == false) {
+        return;
+    }
+
+    obstaclePos = startPos;
+    obstaclePos.y = this->actor.world.pos.y + 120.0f;
+
+    if (movingFast == false) {
+        obstaclePos.x += 276.0f * Math_SinS(this->actor.world.rot.y);
+        obstaclePos.z += 276.0f * Math_CosS(this->actor.world.rot.y);
+    } else {
+        obstaclePos.x += 390.0f * Math_SinS(this->actor.world.rot.y);
+        obstaclePos.z += 390.0f * Math_CosS(this->actor.world.rot.y);
+    }
+
+    obstacleTop = obstaclePos;
+    obstacleTop.y = BgCheck_EntityRaycastFloor3(&play->colCtx, &obstacleFloor, &bgId, &obstaclePos);
+
+    if (obstacleTop.y == BGCHECK_Y_MIN) {
+        return;
+    }
+
+    behindObstacleHeight = obstacleTop.y - this->actor.world.pos.y;
+
+    if (obstacleFloor == NULL) {
+        return;
+    }
+
+    temp_f0 = COLPOLY_GET_NORMAL(obstacleFloor->normal.y);
+    if ((temp_f0 < 0.81915206f) || SurfaceType_IsHorseBlocked(&play->colCtx, obstacleFloor, bgId) ||
+        (SurfaceType_GetFloorType(&play->colCtx, obstacleFloor, bgId) == FLOOR_TYPE_7)) {
+        if ((movingFast == true) && (this->playerControlled == true) && (this->action != ENHORSE_ACTION_STOPPING) &&
+            (play->sceneId != SCENE_KOEPONARACE)) {
+            this->stateFlags |= ENHORSE_FORCE_REVERSING;
+            EnHorse_StartBraking(this, play);
+        }
+    } else if (behindObstacleHeight < -70.0f) {
+        if ((movingFast == true) && (this->playerControlled == true) && (this->action != ENHORSE_ACTION_STOPPING) &&
+            (play->sceneId != SCENE_KOEPONARACE)) {
+            this->stateFlags |= ENHORSE_FORCE_REVERSING;
+            EnHorse_StartBraking(this, play);
+        }
+    } else {
+        temp_f0 = (this->actor.scale.y * 100.0f);
+
+        if ((horseGameCheck == NULL) || (horseGameCheck->actor.id != ACTOR_EN_HORSE_GAME_CHECK) ||
+            ((horseGameCheck->actor.params & 0xFF) != 5)) {
+            if ((movingFast == false) && ((19.0f * temp_f0) < obstacleHeight) &&
+                (obstacleHeight <= (40.0f * temp_f0))) {
+                EnHorse_Stub1(this);
+                this->postDrawFunc = EnHorse_LowJumpInit;
+            } else if ((movingFast == true) &&
+                       (((this->actor.speed < 13.8f) && ((19.0f * temp_f0) < obstacleHeight) &&
+                         (obstacleHeight <= (72.0f * temp_f0))) ||
+                        ((this->actor.speed > 13.8f) && (obstacleHeight <= (112.0f * temp_f0))))) {
+                EnHorse_Stub2(this);
+                this->postDrawFunc = EnHorse_HighJumpInit;
+            }
+        } else if (movingFast == false) {
+            EnHorse_Stub1(this);
+            this->postDrawFunc = EnHorse_LowJumpInit;
+        } else if (movingFast == true) {
+            EnHorse_Stub2(this);
+            this->postDrawFunc = EnHorse_HighJumpInit;
+        }
+    }
+}
+
 /*
 Not sure this section is actually needed.
 
