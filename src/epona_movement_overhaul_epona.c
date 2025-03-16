@@ -1,4 +1,5 @@
 #include "epona_movement_overhaul_epona.h"
+#include "config.h"
 
 typedef struct {
     f32 stickMag;
@@ -42,7 +43,8 @@ RECOMP_PATCH void EnHorse_UpdateSpeed(EnHorse* this, PlayState* play, f32 brakeD
     turnSpeed = turnSpeed * EPONA_GLOBAL_TURN_MULT;
     brakeDecel = brakeDecel * EPONA_GLOBAL_BRAKE_MULT;
 
-    // recomp_printf("CONTROL_MODE: %i\n", USE_ALTERNATE_CONTROLS);
+    recomp_printf("turnSpeed: %u (mult: %f), brakeDecel: %f (mult: %f), MINIMUM_TURN_ANGLE: %u\n",
+        (u32)turnSpeed, EPONA_GLOBAL_TURN_MULT, brakeDecel, EPONA_GLOBAL_BRAKE_MULT, MINIMUM_TURN_ANGLE);
 
     if (!EnHorse_PlayerCanMove(this, play)) {
         if (this->actor.speed > 8.0f) {

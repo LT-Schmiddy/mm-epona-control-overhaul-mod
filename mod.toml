@@ -66,19 +66,79 @@ additional_files = [ ]
 [[manifest.config_options]]
 id = "control_mode"
 name = "Control Mode"
-description = "Whether or not to use the new controls for Epona."
+description = """Select control style for Epona.
+
+* Tank controls are the original.
+* Freeform controls are the new. Epona now moves in the direction of the analog stick.
+* Hybrid controls will use the Freeform controls normally, but switch to Tank when aiming the bow (required Move While Aiming).
+"""
 type = "Enum"
-options = [ "Tank", "Freeform" ]
+options = [ "Tank", "Freeform", "Hybrid"]
 default = "Freeform"
 
-# [[manifest.config_options]]
-# id = "number_option"
-# name = "Number Option"
-# description = "Test number config option."
-# type = "Number"
-# min = 0
-# max = 10
-# step = 0.1
-# precision = 1
-# percent = false
-# default = 1
+[[manifest.config_options]]
+id = "tank_turn_mult"
+name = "Turn Multiplier (Tank Controls)"
+description = "Option to tweak Epona's handling.\n\nIncreases her turn speed when using Tank controls. Use '1.0' for the vanilla."
+type = "Number"
+min = 1
+max = 10
+step = 0.1
+precision = 1
+percent = false
+default = 2
+
+[[manifest.config_options]]
+id = "tank_brake_mult"
+name = "Brake Multiplier (Tank Controls)"
+description = "Option to tweak Epona's handling.\n\nIncreases her stopping speed when using Tank controls. Use '1.0' for the vanilla."
+type = "Number"
+min = 1
+max = 10
+step = 0.1
+precision = 1
+percent = false
+default = 2
+
+[[manifest.config_options]]
+id = "freeform_turn_mult"
+name = "Turn Multiplier (Freeform Controls)"
+description = "Option to tweak Epona's handling.\n\nIncreases her turn speed when using Freeform controls. Use '1.0' for the vanilla."
+type = "Number"
+min = 1
+max = 10
+step = 0.1
+precision = 1
+percent = false
+default = 3
+
+[[manifest.config_options]]
+id = "freeform_brake_mult"
+name = "Brake Multiplier (Freeform Controls)"
+description = "Option to tweak Epona's handling.\n\nIncreases her stopping speed when using Freeform controls. Use '1.0' for the vanilla."
+type = "Number"
+min = 1
+max = 10
+step = 0.1
+precision = 1
+percent = false
+default = 4
+
+[[manifest.config_options]]
+id = "freeform_min_turn_speed"
+name = "Minimum Turn Speed (Freeform Controls)"
+description = """Option to tweak Epona's handling. 
+
+Freeform mode turns Epona gradually to her target direction. This value ensures Epona will turn by at least this angle every frame turning is needed. 
+
+If the calculated turn angle on a frame is lower than the set value, then Epona will snap to the desired angle.
+
+Units: 182 = 1 Degree (Internally, MM uses signed 16-bit integers to track angles, with 32783 being equal to 180 degrees).
+"""
+type = "Number"
+min = 10
+max = 1500
+step = 10
+precision = 0
+percent = false
+default = 1000

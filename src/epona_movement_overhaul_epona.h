@@ -1,5 +1,4 @@
 #include "mod_globals.h"
-#include "config.h"
 
 #include "prevent_bss_reordering.h"
 #include "z64horse.h"
