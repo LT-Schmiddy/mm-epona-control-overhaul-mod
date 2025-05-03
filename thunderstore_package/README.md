@@ -6,6 +6,5 @@ Additionally, this mod offers an optional alternate control scheme: Simply point
 
 Features planned for the future:
 
-* An icon not made by ChatGPT.
 * Improvements to Epona's jumping recognition.
 * Preventing Epona's from stopping for every little random ledge or bump.
