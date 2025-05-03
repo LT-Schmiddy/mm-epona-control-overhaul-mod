@@ -8,3 +8,4 @@ Features planned for the future:
 
 * Improvements to Epona's jumping recognition.
 * Preventing Epona's from stopping for every little random ledge or bump.
+* Epona's speed affected by bunny hood.
