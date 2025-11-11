@@ -16,4 +16,5 @@ build/
 runtime/
 .vscode/settings.json
 .vscode/launch.json
+.vscode/tasks.json
 Epona_Control_Overhaul.thunderstore.zip
