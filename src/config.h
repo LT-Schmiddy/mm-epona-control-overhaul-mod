@@ -25,6 +25,8 @@
 // #define TROT_SPEED_ARGS 0.3f, -0.5f, 10.0f, 0.06f, 6.0f, 800
 // #define GALLOP_SPEED_ARGS 0.3f, -0.5f, 10.0f, 0.06f, 8.0f, 800
 
+#define BUNNY_MOVEMENT_MOVE_SPEED_MULT 2.0f
+#define BUNNY_MOVEMENT_TURN_SPEED_MULT 2.0f
 
 inline u32 is_player_aiming(EnHorse* this, PlayState* play) {
     Player* player = GET_PLAYER(play);

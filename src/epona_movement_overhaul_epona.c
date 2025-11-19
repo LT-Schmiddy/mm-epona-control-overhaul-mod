@@ -43,8 +43,8 @@ RECOMP_PATCH void EnHorse_UpdateSpeed(EnHorse* this, PlayState* play, f32 brakeD
     turnSpeed = turnSpeed * EPONA_GLOBAL_TURN_MULT;
     brakeDecel = brakeDecel * EPONA_GLOBAL_BRAKE_MULT;
 
-    recomp_printf("turnSpeed: %u (mult: %f), brakeDecel: %f (mult: %f), MINIMUM_TURN_ANGLE: %u\n",
-        (u32)turnSpeed, EPONA_GLOBAL_TURN_MULT, brakeDecel, EPONA_GLOBAL_BRAKE_MULT, MINIMUM_TURN_ANGLE);
+    // recomp_printf("turnSpeed: %u (mult: %f), brakeDecel: %f (mult: %f), MINIMUM_TURN_ANGLE: %u\n",
+        // (u32)turnSpeed, EPONA_GLOBAL_TURN_MULT, brakeDecel, EPONA_GLOBAL_BRAKE_MULT, MINIMUM_TURN_ANGLE);
 
     if (!EnHorse_PlayerCanMove(this, play)) {
         if (this->actor.speed > 8.0f) {
@@ -53,6 +53,13 @@ RECOMP_PATCH void EnHorse_UpdateSpeed(EnHorse* this, PlayState* play, f32 brakeD
             this->actor.speed = 0.0f;
         }
         return;
+    }
+
+    Player* player = GET_PLAYER(play);
+    if (player->currentMask == PLAYER_MASK_BUNNY) {
+        baseSpeed *= BUNNY_MOVEMENT_MOVE_SPEED_MULT;
+        turnSpeed *= BUNNY_MOVEMENT_TURN_SPEED_MULT;
+        recomp_printf("Bunny Horse: %f\n", baseSpeed);
     }
 
     baseSpeed *= EnHorse_SlopeSpeedMultiplier(this, play);
