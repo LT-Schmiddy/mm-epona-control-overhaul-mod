@@ -55,11 +55,13 @@ RECOMP_PATCH void EnHorse_UpdateSpeed(EnHorse* this, PlayState* play, f32 brakeD
         return;
     }
 
-    Player* player = GET_PLAYER(play);
-    if (player->currentMask == PLAYER_MASK_BUNNY) {
-        baseSpeed *= BUNNY_MOVEMENT_MOVE_SPEED_MULT;
-        turnSpeed *= BUNNY_MOVEMENT_TURN_SPEED_MULT;
-        recomp_printf("Bunny Horse: %f\n", baseSpeed);
+    if (recomp_get_config_u32("bunny_hood_speed_buff")) {
+        Player* player = GET_PLAYER(play);
+        if (player->currentMask == PLAYER_MASK_BUNNY) {
+            baseSpeed *= BUNNY_MOVEMENT_MOVE_SPEED_MULT;
+            turnSpeed *= BUNNY_MOVEMENT_TURN_SPEED_MULT;
+            recomp_printf("Bunny Horse: %f\n", baseSpeed);
+        }
     }
 
     baseSpeed *= EnHorse_SlopeSpeedMultiplier(this, play);

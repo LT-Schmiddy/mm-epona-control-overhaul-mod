@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.0
+
+Bunny Hood now doubles movement and turn speed while riding Epona.
+
 ## 1.0.3
 
 No code changes. Updated README.md
